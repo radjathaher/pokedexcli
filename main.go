@@ -2,14 +2,35 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
 	"os"
 )
+
+type Config struct {
+	Next     *string
+	Previous *string
+}
+
+type LocationArea struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type LocationAreaResponse struct {
+	Count    int            `json:"count"`
+	Next     *string        `json:"next"`
+	Previous *string        `json:"previous"`
+	Results  []LocationArea `json:"results"`
+}
 
 type cliCommand struct {
 	name        string
 	description string
-	callback    func() error
+	callback    func(*Config) error
 }
 
 func getCommands() map[string]cliCommand {
@@ -17,12 +38,22 @@ func getCommands() map[string]cliCommand {
 		"help": {
 			name:        "help",
 			description: "Prints the list of available commands",
-			callback:    commandHelp,
+			callback:    func(*Config) error { return commandHelp() },
 		},
 		"exit": {
 			name:        "exit",
 			description: "Exits the program",
-			callback:    commandExit,
+			callback:    func(*Config) error { return commandExit() },
+		},
+		"map": {
+			name:        "map",
+			description: "Display names of the next 20 location areas",
+			callback:    commandMap,
+		},
+		"mapb": {
+			name:        "mapb",
+			description: "Display names of the previous 20 location areas",
+			callback:    commandMapb,
 		},
 	}
 }
@@ -42,8 +73,42 @@ func commandExit() error {
 	return nil
 }
 
+func commandMap(config *Config) error {
+	url := "https://pokeapi.co/api/v2/location-area/"
+	res, err := http.Get(url)
+	if err != nil {
+		log.Fatalf("Error fetching data: %s", err)
+	}
+	body, err := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode > 299 {
+		log.Fatalf("Response failed with status code: %d and\nbody: %s\n", res.StatusCode, body)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	var locationResp LocationAreaResponse
+	err = json.Unmarshal(body, &locationResp)
+	if err != nil {
+		return err
+	}
+	for _, area := range locationResp.Results {
+		fmt.Println(area.Name)
+	}
+
+	config.Next = locationResp.Next
+	config.Previous = locationResp.Previous
+	return nil
+}
+
+func commandMapb(config *Config) error {
+	fmt.Println("Displaying the previous 20 location areas")
+	return nil
+}
+
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
+	config := &Config{}
 	cmd := getCommands()
 	for {
 		fmt.Print("Pokedex > ")
@@ -52,7 +117,7 @@ func main() {
 
 		cmd, ok := cmd[input]
 		if ok {
-			err := cmd.callback()
+			err := cmd.callback(config)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error executing command: %s\n", err)
 			}

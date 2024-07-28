@@ -2,29 +2,15 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"net/http"
 	"os"
+	"pokedexcli/internal/pokeapi"
 )
 
 type Config struct {
 	Next     *string
 	Previous *string
-}
-
-type LocationArea struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
-}
-
-type LocationAreaResponse struct {
-	Count    int            `json:"count"`
-	Next     *string        `json:"next"`
-	Previous *string        `json:"previous"`
-	Results  []LocationArea `json:"results"`
+	Client   *pokeapi.Client
 }
 
 type cliCommand struct {
@@ -73,74 +59,46 @@ func commandExit() error {
 	return nil
 }
 
-func commandMap(config *Config) error {
-	url := "https://pokeapi.co/api/v2/location-area/"
-	if config.Next != nil {
-		url = *config.Next
-	}
-	res, err := http.Get(url)
-	if err != nil {
-		log.Fatalf("Error fetching data: %s", err)
-	}
-	body, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if res.StatusCode > 299 {
-		log.Fatalf("Response failed with status code: %d and\nbody: %s\n", res.StatusCode, body)
-	}
-	if err != nil {
-		log.Fatal(err)
-	}
-	var locationResp LocationAreaResponse
-	err = json.Unmarshal(body, &locationResp)
+func commandMap(cfg *Config) error {
+	res, err := cfg.Client.GetLocationAreas(cfg.Next)
 	if err != nil {
 		return err
 	}
 	fmt.Println("Location areas:")
-	for _, area := range locationResp.Results {
+	for _, area := range res.Results {
 		fmt.Println(area.Name)
 	}
 
-	config.Next = locationResp.Next
-	config.Previous = locationResp.Previous
+	cfg.Next = res.Next
+	cfg.Previous = res.Previous
 	return nil
 }
 
-func commandMapb(config *Config) error {
-	if config.Previous == nil {
+func commandMapb(cfg *Config) error {
+	if cfg.Previous == nil {
 		return fmt.Errorf("you are already at the first page")
 	}
-	url := *config.Previous
-	res, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("error fetching data: %w", err)
-	}
-	defer res.Body.Close()
 
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return fmt.Errorf("error reading response body: %w", err)
-	}
-	if res.StatusCode > 299 {
-		return fmt.Errorf("response failed with status code: %d and body: %s", res.StatusCode, body)
-	}
-	var locationResp LocationAreaResponse
-	err = json.Unmarshal(body, &locationResp)
+	res, err := cfg.Client.GetLocationAreas(cfg.Previous)
 	if err != nil {
 		return err
 	}
+
 	fmt.Println("Location areas:")
-	for _, area := range locationResp.Results {
+	for _, area := range res.Results {
 		fmt.Println(area.Name)
 	}
 
-	config.Next = locationResp.Next
-	config.Previous = locationResp.Previous
+	cfg.Next = res.Next
+	cfg.Previous = res.Previous
 	return nil
 }
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
-	config := &Config{}
+	cfg := &Config{
+		Client: pokeapi.NewClient(),
+	}
 	cmd := getCommands()
 	for {
 		fmt.Print("Pokedex > ")
@@ -149,7 +107,7 @@ func main() {
 
 		cmd, ok := cmd[input]
 		if ok {
-			err := cmd.callback(config)
+			err := cmd.callback(cfg)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error executing command: %s\n", err)
 			}

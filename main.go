@@ -75,6 +75,9 @@ func commandExit() error {
 
 func commandMap(config *Config) error {
 	url := "https://pokeapi.co/api/v2/location-area/"
+	if config.Next != nil {
+		url = *config.Next
+	}
 	res, err := http.Get(url)
 	if err != nil {
 		log.Fatalf("Error fetching data: %s", err)
@@ -92,6 +95,7 @@ func commandMap(config *Config) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("Location areas:")
 	for _, area := range locationResp.Results {
 		fmt.Println(area.Name)
 	}
@@ -102,7 +106,35 @@ func commandMap(config *Config) error {
 }
 
 func commandMapb(config *Config) error {
-	fmt.Println("Displaying the previous 20 location areas")
+	if config.Previous == nil {
+		return fmt.Errorf("you are already at the first page")
+	}
+	url := *config.Previous
+	res, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("error fetching data: %w", err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response body: %w", err)
+	}
+	if res.StatusCode > 299 {
+		return fmt.Errorf("response failed with status code: %d and body: %s", res.StatusCode, body)
+	}
+	var locationResp LocationAreaResponse
+	err = json.Unmarshal(body, &locationResp)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Location areas:")
+	for _, area := range locationResp.Results {
+		fmt.Println(area.Name)
+	}
+
+	config.Next = locationResp.Next
+	config.Previous = locationResp.Previous
 	return nil
 }
 

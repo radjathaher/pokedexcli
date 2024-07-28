@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"pokedexcli/internal/pokeapi"
+	"time"
 )
 
 type Config struct {
@@ -97,7 +98,7 @@ func commandMapb(cfg *Config) error {
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	cfg := &Config{
-		Client: pokeapi.NewClient(),
+		Client: pokeapi.NewClient(10 * time.Second),
 	}
 	cmd := getCommands()
 	for {

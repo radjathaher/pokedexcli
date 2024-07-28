@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"pokedexcli/internal/pokecache"
+	"time"
 )
 
 type Client struct {
-	BaseURL string
+	BaseURL    string
+	cache      *pokecache.Cache
+	httpClient *http.Client
 }
 
 type LocationArea struct {
@@ -23,8 +27,12 @@ type LocationAreaResponse struct {
 	Results  []LocationArea `json:"results"`
 }
 
-func NewClient() *Client {
-	return &Client{BaseURL: "https://pokeapi.co/api/v2/"}
+func NewClient(cacheInterval time.Duration) *Client {
+	return &Client{
+		BaseURL:    "https://pokeapi.co/api/v2/",
+		cache:      pokecache.NewCache(cacheInterval),
+		httpClient: &http.Client{},
+	}
 }
 
 func (c *Client) GetLocationAreas(pageURL *string) (LocationAreaResponse, error) {
@@ -32,7 +40,15 @@ func (c *Client) GetLocationAreas(pageURL *string) (LocationAreaResponse, error)
 	if pageURL != nil {
 		endpoint = *pageURL
 	}
-	res, err := http.Get(endpoint)
+	cache, ok := c.cache.Get(endpoint)
+	if ok {
+		var locationResp LocationAreaResponse
+		err := json.Unmarshal(cache, &locationResp)
+		if err == nil {
+			return locationResp, nil
+		}
+	}
+	res, err := c.httpClient.Get(endpoint)
 	if err != nil {
 		return LocationAreaResponse{}, fmt.Errorf("error making GET request: %w", err)
 	}
@@ -46,6 +62,9 @@ func (c *Client) GetLocationAreas(pageURL *string) (LocationAreaResponse, error)
 	if res.StatusCode > 299 {
 		return LocationAreaResponse{}, fmt.Errorf("response failed with status code: %d and body: %s", res.StatusCode, body)
 	}
+
+	c.cache.Add(endpoint, body)
+
 	var locationResp LocationAreaResponse
 	err = json.Unmarshal(body, &locationResp)
 	if err != nil {

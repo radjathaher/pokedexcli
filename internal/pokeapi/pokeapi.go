@@ -315,7 +315,7 @@ type LocationAreaDetails struct {
 type Client struct {
 	BaseURL    string
 	cache      *pokecache.Cache
-	pokedex    Pokedex
+	pokedex    *Pokedex
 	httpClient *http.Client
 }
 
@@ -335,7 +335,7 @@ func NewClient(cacheInterval time.Duration) *Client {
 	return &Client{
 		BaseURL:    "https://pokeapi.co/api/v2/",
 		cache:      pokecache.NewCache(cacheInterval),
-		pokedex:    Pokedex{pokemon: make(map[string]Pokemon)},
+		pokedex:    &Pokedex{pokemon: make(map[string]Pokemon)},
 		httpClient: &http.Client{},
 	}
 }
@@ -451,4 +451,11 @@ func (c *Client) AddToPokedex(pokemon Pokemon) {
 	c.pokedex.mu.Lock()
 	defer c.pokedex.mu.Unlock()
 	c.pokedex.pokemon[pokemon.Name] = pokemon
+}
+
+func (c *Client) GetFromPokedex(name string) (Pokemon, bool) {
+	c.pokedex.mu.Lock()
+	defer c.pokedex.mu.Unlock()
+	pokemon, ok := c.pokedex.pokemon[name]
+	return pokemon, ok
 }

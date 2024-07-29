@@ -459,3 +459,13 @@ func (c *Client) GetFromPokedex(name string) (Pokemon, bool) {
 	pokemon, ok := c.pokedex.pokemon[name]
 	return pokemon, ok
 }
+
+func (c *Client) GetPokedex() []Pokemon {
+	c.pokedex.mu.Lock()
+	defer c.pokedex.mu.Unlock()
+	pokedex := make([]Pokemon, 0, len(c.pokedex.pokemon))
+	for _, pokemon := range c.pokedex.pokemon {
+		pokedex = append(pokedex, pokemon)
+	}
+	return pokedex
+}

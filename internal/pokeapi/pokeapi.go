@@ -9,6 +9,32 @@ import (
 	"time"
 )
 
+type LocationAreaDetails struct {
+	ID                int    `json:"id"`
+	Name              string `json:"name"`
+	PokemonEncounters []struct {
+		Pokemon struct {
+			Name string `json:"name"`
+			URL  string `json:"url"`
+		} `json:"pokemon"`
+		VersionDetails []struct {
+			EncounterDetails []struct {
+				Chance   int `json:"chance"`
+				MaxLevel int `json:"max_level"`
+				MinLevel int `json:"min_level"`
+				Method   struct {
+					Name string `json:"name"`
+					URL  string `json:"url"`
+				} `json:"method"`
+			} `json:"encounter_details"`
+			Version struct {
+				Name string `json:"name"`
+				URL  string `json:"url"`
+			} `json:"version"`
+		} `json:"version_details"`
+	} `json:"pokemon_encounters"`
+}
+
 type Client struct {
 	BaseURL    string
 	cache      *pokecache.Cache
@@ -72,4 +98,38 @@ func (c *Client) GetLocationAreas(pageURL *string) (LocationAreaResponse, error)
 	}
 
 	return locationResp, nil
+}
+
+func (c *Client) GetLocationArea(name string) (LocationAreaDetails, error) {
+	endpoint := fmt.Sprintf("%s/location-area/%s", c.BaseURL, name)
+
+	if cachedData, ok := c.cache.Get(endpoint); ok {
+		var locationArea LocationAreaDetails
+		err := json.Unmarshal(cachedData, &locationArea)
+		if err == nil {
+			return locationArea, nil
+		}
+	}
+	res, err := c.httpClient.Get(endpoint)
+	if err != nil {
+		return LocationAreaDetails{}, fmt.Errorf("error making GET request: %w", err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return LocationAreaDetails{}, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if res.StatusCode > 299 {
+		return LocationAreaDetails{}, fmt.Errorf("response failed with status code: %d and body: %s", res.StatusCode, body)
+	}
+
+	var locationArea LocationAreaDetails
+	err = json.Unmarshal(body, &locationArea)
+	if err != nil {
+		return LocationAreaDetails{}, fmt.Errorf("error unmarshalling response body: %w", err)
+	}
+	c.cache.Add(endpoint, body)
+	return locationArea, nil
 }

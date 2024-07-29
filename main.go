@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"pokedexcli/internal/pokeapi"
+	"strings"
 	"time"
 )
 
@@ -17,7 +18,7 @@ type Config struct {
 type cliCommand struct {
 	name        string
 	description string
-	callback    func(*Config) error
+	callback    func(*Config, ...string) error
 }
 
 func getCommands() map[string]cliCommand {
@@ -25,12 +26,12 @@ func getCommands() map[string]cliCommand {
 		"help": {
 			name:        "help",
 			description: "Prints the list of available commands",
-			callback:    func(*Config) error { return commandHelp() },
+			callback:    commandHelp,
 		},
 		"exit": {
 			name:        "exit",
 			description: "Exits the program",
-			callback:    func(*Config) error { return commandExit() },
+			callback:    commandExit,
 		},
 		"map": {
 			name:        "map",
@@ -42,10 +43,15 @@ func getCommands() map[string]cliCommand {
 			description: "Display names of the previous 20 location areas",
 			callback:    commandMapb,
 		},
+		"explore": {
+			name:        "explore",
+			description: "Explore the location areas",
+			callback:    commandExplore,
+		},
 	}
 }
 
-func commandHelp() error {
+func commandHelp(cfg *Config, args ...string) error {
 	commands := getCommands()
 	fmt.Println("Available commands:")
 	for _, cmd := range commands {
@@ -54,13 +60,13 @@ func commandHelp() error {
 	return nil
 }
 
-func commandExit() error {
+func commandExit(cfg *Config, args ...string) error {
 	fmt.Println("Exiting program...")
 	os.Exit(0)
 	return nil
 }
 
-func commandMap(cfg *Config) error {
+func commandMap(cfg *Config, args ...string) error {
 	res, err := cfg.Client.GetLocationAreas(cfg.Next)
 	if err != nil {
 		return err
@@ -75,7 +81,7 @@ func commandMap(cfg *Config) error {
 	return nil
 }
 
-func commandMapb(cfg *Config) error {
+func commandMapb(cfg *Config, args ...string) error {
 	if cfg.Previous == nil {
 		return fmt.Errorf("you are already at the first page")
 	}
@@ -95,6 +101,23 @@ func commandMapb(cfg *Config) error {
 	return nil
 }
 
+func commandExplore(cfg *Config, args ...string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("please provide a location area name to explore")
+	}
+	locationAreaName := args[0]
+	locationArea, err := cfg.Client.GetLocationArea(locationAreaName)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Exploring %s...\n", locationAreaName)
+	fmt.Println("Found Pokemon:")
+	for _, encounter := range locationArea.PokemonEncounters {
+		fmt.Printf("%s\n", encounter.Pokemon.Name)
+	}
+	return nil
+}
+
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	cfg := &Config{
@@ -106,9 +129,17 @@ func main() {
 		scanner.Scan()
 		input := scanner.Text()
 
-		cmd, ok := cmd[input]
+		words := strings.Fields(input)
+		if len(words) == 0 {
+			continue
+		}
+
+		commandName := words[0]
+		args := words[1:]
+
+		cmd, ok := cmd[commandName]
 		if ok {
-			err := cmd.callback(cfg)
+			err := cmd.callback(cfg, args...)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error executing command: %s\n", err)
 			}

@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"math/rand"
 	"os"
 	"pokedexcli/internal/pokeapi"
 	"strings"
@@ -47,6 +48,11 @@ func getCommands() map[string]cliCommand {
 			name:        "explore",
 			description: "Explore the location areas",
 			callback:    commandExplore,
+		},
+		"catch": {
+			name:        "catch",
+			description: "Catch a pokemon",
+			callback:    commandCatch,
 		},
 	}
 }
@@ -116,6 +122,26 @@ func commandExplore(cfg *Config, args ...string) error {
 		fmt.Printf("%s\n", encounter.Pokemon.Name)
 	}
 	return nil
+}
+
+func commandCatch(cfg *Config, args ...string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("please provide a pokemon name to catch")
+	}
+	pokemonName := args[0]
+	fmt.Printf("Throwing a pokeball at %s...\n", pokemonName)
+	pokemonData, err := cfg.Client.GetPokemonData(pokemonName)
+	if err != nil {
+		return fmt.Errorf("error fetching pokemon data")
+	}
+	if rand.Intn(pokemonData.BaseExperience)*2 > pokemonData.BaseExperience {
+		// then add the pokemon to the pokedex
+		fmt.Printf("%s was caught\n", pokemonName)
+		return nil
+	} else {
+		fmt.Printf("%s escaped!\n", pokemonName)
+		return nil
+	}
 }
 
 func main() {
